@@ -1,3 +1,4 @@
+// Enums for different values
 let gameStates = {
     PAUSED : 0,
     REDTURN : 1,
@@ -38,9 +39,7 @@ class player {
     }
 
     get_move() {
-        let x = 4;
-        let move = new Connect4move(x, this.symbol);
-        return move;
+        return new Connect4move();
     }
 }
 
@@ -48,7 +47,7 @@ class humanPlayer extends player {
     constructor(symbol, board) {
         super(symbol, board);
     }
-    get_selected() {
+    get_selected() { // find which html tile is selected and return it
         let x;
         for (let y in this.board.board) {
             let row = this.board.board[y];
@@ -85,12 +84,12 @@ class AIplayer extends player {
         const totalMoves = (this.board.width * this.board.height);
         let max = -totalMoves;
         let best_move = 0;
-        for (let x of [3,4,2,5,1,6,0]) {
+        for (let x of [3,4,2,5,1,6,0]) { //check for moves starting with center columns
             const move = new Connect4move(x, this.symbol)
             if(!this.board.validate_move(move)) continue;
             
             this.board.apply_move(move);
-            const score = -this.negamax(this.symbol*-1,7);
+            const score = -this.negamax(this.symbol*-1,7); //calculate the score for a given move (looking 7 moves deep)
             this.board.undo();
             
             if (score > max) {
@@ -109,7 +108,7 @@ class AIplayer extends player {
         return true;
     }
 
-    eval_position() {
+    eval_position() { // statically evaluate position using heatmap
         let evaluation = 0;
         let heatMap = [
             [0,   0,   0,   0.4, 0,   0,   0  ],
@@ -131,44 +130,50 @@ class AIplayer extends player {
     }
     
     negamax(playerSymbol, depth, alpha=-9999, beta=9999, ) {
+        // if depth has been reached, use static calculator for position
         if (depth == 0) return this.eval_position();
 
+        // return for a draw
         let boardState = this.board.eval_state();
         if (boardState == boardStates.DRAW) return 0;
         
         const totalMoves = (this.board.width * this.board.height);
-      
-        for(let x = 0; x < this.board.width; x++) {// check if current player can win next move
+    
+        // check for a win on the next move
+        for(let x = 0; x < this.board.width; x++) {
             if(this.board.check_open(x) && this.board.check_win(x,playerSymbol)) {
                 return (totalMoves - (this.board.history.length+1)) / 2;
             }
         }
             
-        
-        let max = (totalMoves - (this.board.history.length+1)) / 2; // init the best possible score with a lower bound of score.
+        // initialize max 
+        let max = (totalMoves - (this.board.history.length+1)) / 2;
 
+        // close beta range to the max value
+        // if this closes alpha-beta window return beta
         if(beta > max) {
-          beta = max;                     // there is no need to keep beta above our max possible score.
-          if(alpha >= beta) return beta;  // prune the exploration if the [alpha;beta] window is empty.
+          beta = max;
+          if(alpha >= beta) return beta;
         }
 
-        for (let x of [3,4,2,5,1,6,0]) { // compute the score of all possible next move and keep the best one
+        // check all possible next moves
+        for (let x of [3,4,2,5,1,6,0]) {
             const move = new Connect4move(x, playerSymbol)
             if(!this.board.validate_move(move)) continue;
             
             this.board.apply_move(move);
-            
-            const score = -this.negamax(playerSymbol*-1,depth-1, -beta, -alpha); // If current player plays col x, his score will be the opposite of opponent's score after playing col x
+            // calculate score of hypothetical move
+            const score = -this.negamax(playerSymbol*-1,depth-1, -beta, -alpha);
 
             this.board.undo();
             
+            
+            if(score >= beta) return score; // if score is higher then range return score
+            if(score > alpha) alpha = score; // update bottom of window (alpha)
 
-            if(score >= beta) return score;  // prune the exploration if we find a possible move better than what we were looking for.
-            if(score > alpha) alpha = score; // reduce the [alpha;beta] window for next exploration, as we only 
-            // need to search for a position that is better than the best so far.
             
         }
-        return alpha;
+        return alpha; // return the lower range
     }
 }
 
@@ -185,6 +190,7 @@ class GameBoard {
         this.width = width;
         this.height = height;
         this.board = [];
+        // initialize with 0s
         for (let _=0;_<this.height;_++) {
             let row = []
             for (let __=0;__<this.width;__++) {
@@ -195,6 +201,7 @@ class GameBoard {
     }
 
     display() {
+        // go through the html table stored in htmlNode and asign it values from board
         for (let y in this.board) {
             let row = this.board[y];
             for (let x in row) {
@@ -221,7 +228,7 @@ class Connect4Board extends GameBoard {
     }
 
 
-    validate_move(move) {
+    validate_move(move) { // check if a move is valid
         if (move.location < 0) return false;
         if (move.location >= this.width) return false;
         if (!this.tileset.hasOwnProperty(move.value)) return false;
@@ -231,6 +238,7 @@ class Connect4Board extends GameBoard {
     }
 
     undo() {
+        // remove the last move from the history and set its position to empty
         let lastMove = this.history.pop();
         let x = lastMove.location;
         let y;
@@ -266,17 +274,21 @@ class Connect4Board extends GameBoard {
             if (this.board[y][x] == Symbols.EMPTY) break;
         }
 
+        // temporarily assigns the move and sees if it leads to a win
         this.board[y][x] = symbol;
         let boardState = this.eval_point(x, y);
         this.board[y][x] = Symbols.EMPTY;
+        
         if (boardState == boardStates.WIN) return true;
         return false;
 
     }
+    
     check_open(xPos) {
         return this.board[0][xPos] == Symbols.EMPTY;
     }
     
+    // check an individual point for a win
     eval_point(xPos, yPos) {
         xPos = Number(xPos);
         yPos = Number(yPos)
@@ -285,6 +297,7 @@ class Connect4Board extends GameBoard {
         let xMin = Math.max(xPos-(this.win_length-1),0);
         let xMax = Math.min(xPos+(this.win_length-1),this.width-1);
 
+        // horizontal win
         for (let x=xMin; x <= xMax; x++) {
             winStr += this.tileset[this.board[yPos][x]];
         }
@@ -294,11 +307,13 @@ class Connect4Board extends GameBoard {
         let yMin = Math.max(yPos-(this.win_length-1),0);
         let yMax = Math.min(yPos+(this.win_length-1),this.height-1);
 
+        // vertical win
         for (let y=yMin; y <= yMax; y++) {
             winStr += this.tileset[this.board[y][xPos]];
         }
         winStr += "|";
-
+        
+        // diagonal win
         for (let i=-(this.win_length-1); i <= (this.win_length-1); i ++) {
             if (yPos+i < 0 | yPos+i >= this.height) continue;
             if (xPos+i < 0 | xPos+i >= this.width) continue;
@@ -306,16 +321,21 @@ class Connect4Board extends GameBoard {
         }
         winStr += "|";
         
+        // diagonal win
         for (let i=-(this.win_length-1); i <= (this.win_length-1); i ++) {
             if (yPos+i < 0 | yPos+i >= this.height) continue;
             if (xPos-i < 0 | xPos-i >= this.width) continue;
             winStr += this.tileset[this.board[yPos+i][xPos-i]];
         }
+        
         let winRow = String(this.tileset[this.board[yPos][xPos]]).repeat(this.win_length);
+        // create a string of 4 of the current tile XXXX
         if (winStr.includes(winRow)) return boardStates.WIN;
+        // see if the winstr, which represent the four ways to win, cotains XXXX
         return boardStates.NOWIN;
     }
 
+    // evaluate a board state by checking that last move made in the history
     eval_state() {
         let x = Number(this.history[this.history.length - 1].location);
         let y;
@@ -334,7 +354,7 @@ class Connect4Board extends GameBoard {
 }
 
 
-
+// Event Listeners add and remove the selected class when a tile is moused over and off
 let htmlTiles = document.querySelectorAll('td');
 
 function select() {
@@ -348,7 +368,7 @@ function deSelect() {
 }
 htmlTiles.forEach(tile => tile.addEventListener('mouseleave',deSelect))
 
-
+// event toggles the player buttons between Human and Robot
 function playerToggle() {
     if (this.innerHTML == "Human") this.innerHTML = "Robot";
     else if (this.innerHTML == "Robot") this.innerHTML = "Human";
@@ -358,6 +378,7 @@ let playerButtons = document.querySelectorAll('.playerButton')
 
 playerButtons.forEach(button => button.addEventListener('click',playerToggle))
 
+// game logic that complete one turn of the game
 function take_turn() {
     if (gameState == gameStates.PAUSED) return;
     let moveMade = false;
@@ -365,6 +386,7 @@ function take_turn() {
     if (gameState == player2.symbol) moveMade = player2.take_turn();
     if (moveMade == false) return;
 
+    // check for end of a game
     const boardState = board.eval_state();
     if (boardState != boardStates.CONTINUE) {
         let disp;
@@ -377,6 +399,7 @@ function take_turn() {
     gameState *= -1;
     board.display();
     
+    // if there is an AI player who is supposed to go next, take their turn (don't wait for a mouse click)
     if (gameState == player1.symbol && player1 instanceof AIplayer) take_turn();
     else if (gameState == player2.symbol && player2 instanceof AIplayer) take_turn();
     
@@ -384,6 +407,7 @@ function take_turn() {
 
 document.body.onclick = take_turn;
 
+// Global variables to track the various game objects
 let gameState = gameStates.PAUSED;
 let player1, player2, board;
 
@@ -400,7 +424,7 @@ function start() {
     if (playerButtons[0].innerHTML == "Human") player1 = new humanPlayer(1, board);
     else {
         player1 = new AIplayer(1, board);
-        take_turn();
+        take_turn(); // If AI player is going first, take their turn
     }
 
     board.display()
@@ -408,4 +432,5 @@ function start() {
     
 }
 
+// Event for the start button
 document.querySelector(".playButton").addEventListener('click',start)
